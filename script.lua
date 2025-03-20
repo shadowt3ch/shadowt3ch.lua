@@ -19,22 +19,15 @@ local walkSpeed = 32
 local aimbotRange = 100
 local bodyVelocity, bodyGyro = nil, nil
 local espObjects = {}
-local isJumping = false -- Track jump state for mobile
+local isJumping = false
 
 -- Main UI Setup
 local ScreenGui = Instance.new("ScreenGui")
-local MainFrame = Instance.new("Frame")
-local TitleBar = Instance.new("Frame")
-local Title = Instance.new("TextLabel")
-local URLLabel = Instance.new("TextLabel")
-local TabFrame = Instance.new("Frame")
-local TitleAccent = Instance.new("Frame")
-local TabAccent = Instance.new("Frame")
-
 ScreenGui.Parent = player:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn = false
+print("ScreenGui initialized")
 
--- Main Frame Properties
+local MainFrame = Instance.new("Frame")
 MainFrame.Parent = ScreenGui
 MainFrame.Size = UDim2.new(0, 500, 0, 400)
 MainFrame.Position = UDim2.new(0.5, -250, 0.5, -200)
@@ -43,18 +36,18 @@ MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
 
--- Title Bar
+local TitleBar = Instance.new("Frame")
 TitleBar.Parent = MainFrame
 TitleBar.Size = UDim2.new(1, 0, 0, 30)
 TitleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 
--- Title Accent Line
+local TitleAccent = Instance.new("Frame")
 TitleAccent.Parent = TitleBar
 TitleAccent.Size = UDim2.new(1, 0, 0, 2)
 TitleAccent.Position = UDim2.new(0, 0, 1, -2)
 TitleAccent.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
 
--- Title
+local Title = Instance.new("TextLabel")
 Title.Parent = TitleBar
 Title.Size = UDim2.new(0.7, 0, 1, 0)
 Title.Position = UDim2.new(0, 5, 0, 0)
@@ -65,7 +58,7 @@ Title.TextSize = 14
 Title.BackgroundTransparency = 1
 Title.TextXAlignment = Enum.TextXAlignment.Left
 
--- URL Label
+local URLLabel = Instance.new("TextLabel")
 URLLabel.Parent = TitleBar
 URLLabel.Size = UDim2.new(0.3, -5, 1, 0)
 URLLabel.Position = UDim2.new(0.7, 0, 0, 0)
@@ -76,13 +69,13 @@ URLLabel.TextSize = 12
 URLLabel.BackgroundTransparency = 1
 URLLabel.TextXAlignment = Enum.TextXAlignment.Right
 
--- Tab Frame
+local TabFrame = Instance.new("Frame")
 TabFrame.Parent = MainFrame
 TabFrame.Size = UDim2.new(1, 0, 0, 30)
 TabFrame.Position = UDim2.new(0, 0, 0, 30)
 TabFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 
--- Tab Accent Line
+local TabAccent = Instance.new("Frame")
 TabAccent.Parent = TabFrame
 TabAccent.Size = UDim2.new(1, 0, 0, 2)
 TabAccent.Position = UDim2.new(0, 0, 1, -2)
@@ -134,10 +127,12 @@ for i, tabName in ipairs(Tabs) do
 		ContentFrame.Visible = true
 		TabButton.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
 	end)
+	print("Tab '" .. tabName .. "' initialized")
 end
 
 -- Hack Functions
 local function toggleSpeed()
+	if not humanoid then return end
 	speedEnabled = not speedEnabled
 	local toggleButton = ContentFrames["Speed"]:FindFirstChild("ToggleButton")
 	if speedEnabled then
@@ -152,6 +147,7 @@ local function toggleSpeed()
 end
 
 local function toggleFly()
+	if not rootPart or not humanoid then return end
 	flyEnabled = not flyEnabled
 	local toggleButton = ContentFrames["Fly"]:FindFirstChild("ToggleButton")
 	if flyEnabled then
@@ -178,17 +174,13 @@ end
 
 local function updateFlight()
 	if flyEnabled and rootPart and bodyVelocity and bodyGyro then
-		local camera = workspace.CurrentCamera
 		local direction = Vector3.new()
 		local camLook = camera.CFrame.LookVector
 		local moveDir = humanoid.MoveDirection
 		
-		-- Horizontal movement (WASD or mobile joystick)
 		if moveDir.Magnitude > 0 then direction = direction + moveDir end
-		
-		-- Vertical movement (Jump for up, Shift for down)
-		if isJumping then direction = direction + Vector3.new(0, 1, 0) end -- Jump button (mobile/PC)
-		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then direction = direction + Vector3.new(0, -1, 0) end -- Shift for PC
+		if isJumping then direction = direction + Vector3.new(0, 1, 0) end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then direction = direction + Vector3.new(0, -1, 0) end
 		
 		if direction.Magnitude > 0 then direction = direction.Unit * flySpeed end
 		bodyVelocity.Velocity = direction
@@ -197,6 +189,7 @@ local function updateFlight()
 end
 
 local function toggleInvisible()
+	if not character then return end
 	invisibleEnabled = not invisibleEnabled
 	local toggleButton = ContentFrames["Invis"]:FindFirstChild("ToggleButton")
 	if invisibleEnabled then
@@ -227,6 +220,7 @@ local function toggleInvisible()
 end
 
 local function toggleGodMode()
+	if not humanoid then return end
 	godModeEnabled = not godModeEnabled
 	local toggleButton = ContentFrames["God"]:FindFirstChild("ToggleButton")
 	if godModeEnabled then
@@ -243,6 +237,7 @@ local function toggleGodMode()
 end
 
 local function teleportToPlayer(targetInput)
+	if not rootPart then return end
 	targetInput = targetInput:lower():gsub("%s+", "")
 	local target = nil
 	
@@ -256,27 +251,15 @@ local function teleportToPlayer(targetInput)
 	end
 	
 	if not target then
-		warn("No player found matching '" .. targetInput .. "' (checked Name and DisplayName).")
+		warn("No player found matching '" .. targetInput .. "'")
 		return
 	end
 	
-	local targetCharacter = target.Character
-	if not targetCharacter or not targetCharacter:FindFirstChild("HumanoidRootPart") then
-		warn("Waiting for '" .. target.Name .. "' character to load...")
-		targetCharacter = target.CharacterAdded:Wait()
-		if not targetCharacter:FindFirstChild("HumanoidRootPart") then
-			warn("Target '" .. target.Name .. "' has no HumanoidRootPart.")
-			return
-		end
-	end
-	
-	if not rootPart then
-		warn("Local player has no HumanoidRootPart.")
-		return
-	end
+	local targetCharacter = target.Character or target.CharacterAdded:Wait()
+	local targetRoot = targetCharacter:WaitForChild("HumanoidRootPart")
 	
 	local success, error = pcall(function()
-		rootPart.CFrame = targetCharacter.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+		rootPart.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0)
 	end)
 	
 	if success then
@@ -287,13 +270,14 @@ local function teleportToPlayer(targetInput)
 end
 
 local function createESP(targetPlayer)
-	if targetPlayer == player or not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("Head") then return end
+	if targetPlayer == player or not targetPlayer.Character then return end
+	local head = targetPlayer.Character:WaitForChild("Head", 5)
+	if not head then return end
 	
 	local esp = {}
-	
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "ESPBillboard"
-	billboard.Adornee = targetPlayer.Character.Head
+	billboard.Adornee = head
 	billboard.Size = UDim2.new(0, 100, 0, 30)
 	billboard.StudsOffset = Vector3.new(0, 3, 0)
 	billboard.AlwaysOnTop = true
@@ -341,6 +325,7 @@ local function toggleESP()
 end
 
 local function getNearestPlayer()
+	if not rootPart then return end
 	local closestPlayer = nil
 	local shortestDistance = aimbotRange
 	
@@ -382,6 +367,7 @@ local function updateAimbot()
 end
 
 local function toggleNoClip()
+	if not character or not humanoid then return end
 	noClipEnabled = not noClipEnabled
 	local toggleButton = ContentFrames["NoClip"]:FindFirstChild("ToggleButton")
 	if noClipEnabled then
@@ -573,16 +559,6 @@ local function createTabContent(tabName, ContentFrame)
 		createSlider(ContentFrame, 70, 50, 500, aimbotRange, function(value)
 			aimbotRange = value
 		end)
-
-		local InfoLabel = Instance.new("TextLabel")
-		InfoLabel.Size = UDim2.new(0.9, 0, 0, 40)
-		InfoLabel.Position = UDim2.new(0.05, 0, 0, 120)
-		InfoLabel.BackgroundTransparency = 1
-		InfoLabel.Text = "Adjust range with slider"
-		InfoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-		InfoLabel.Font = Enum.Font.Gotham
-		InfoLabel.TextSize = 14
-		InfoLabel.Parent = ContentFrame
 	elseif tabName == "NoClip" then
 		local ToggleButton = Instance.new("TextButton")
 		ToggleButton.Name = "ToggleButton"
@@ -595,16 +571,6 @@ local function createTabContent(tabName, ContentFrame)
 		ToggleButton.TextSize = 18
 		ToggleButton.Parent = ContentFrame
 		ToggleButton.MouseButton1Click:Connect(toggleNoClip)
-
-		local InfoLabel = Instance.new("TextLabel")
-		InfoLabel.Size = UDim2.new(0.9, 0, 0, 40)
-		InfoLabel.Position = UDim2.new(0.05, 0, 0, 70)
-		InfoLabel.BackgroundTransparency = 1
-		InfoLabel.Text = "Use with Fly for best results"
-		InfoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-		InfoLabel.Font = Enum.Font.Gotham
-		InfoLabel.TextSize = 14
-		InfoLabel.Parent = ContentFrame
 	end
 end
 
@@ -614,4 +580,47 @@ for tabName, frame in pairs(ContentFrames) do
 end
 
 -- Jump Detection for Mobile
-UserInputService.JumpRequest:Connect(function
+UserInputService.JumpRequest:Connect(function()
+	if flyEnabled then
+		isJumping = true
+		delay(0.1, function()
+			isJumping = false
+		end)
+	end
+end)
+
+-- Updates
+RunService.RenderStepped:Connect(function()
+	updateFlight()
+	updateAimbot()
+	if godModeEnabled and humanoid and humanoid.Health < math.huge then humanoid.Health = math.huge end
+end)
+
+player.CharacterAdded:Connect(function(newCharacter)
+	character = newCharacter
+	humanoid = character:WaitForChild("Humanoid")
+	rootPart = character:WaitForChild("HumanoidRootPart")
+	if speedEnabled then toggleSpeed() toggleSpeed() end
+	if flyEnabled then toggleFly() toggleFly() end
+	if invisibleEnabled then toggleInvisible() toggleInvisible() end
+	if godModeEnabled then toggleGodMode() toggleGodMode() end
+	if noClipEnabled then toggleNoClip() toggleNoClip() end
+end)
+
+game.Players.PlayerAdded:Connect(function(newPlayer)
+	if espEnabled then
+		newPlayer.CharacterAdded:Connect(function()
+			createESP(newPlayer)
+		end)
+	end
+end)
+
+game.Players.PlayerRemoving:Connect(function(leavingPlayer)
+	if espObjects[leavingPlayer] then
+		if espObjects[leavingPlayer].billboard then espObjects[leavingPlayer].billboard:Destroy() end
+		if espObjects[leavingPlayer].highlight then espObjects[leavingPlayer].highlight:Destroy() end
+		espObjects[leavingPlayer] = nil
+	end
+end)
+
+print("Script loaded successfully")
