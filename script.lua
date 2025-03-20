@@ -177,11 +177,11 @@ local function updateFlight()
 		local direction = Vector3.new()
 		local camLook = camera.CFrame.LookVector
 		local moveDir = humanoid.MoveDirection
-		
+
 		if moveDir.Magnitude > 0 then direction = direction + moveDir end
 		if isJumping then direction = direction + Vector3.new(0, 1, 0) end
 		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then direction = direction + Vector3.new(0, -1, 0) end
-		
+
 		if direction.Magnitude > 0 then direction = direction.Unit * flySpeed end
 		bodyVelocity.Velocity = direction
 		bodyGyro.CFrame = CFrame.new(rootPart.Position, rootPart.Position + camLook)
@@ -240,7 +240,7 @@ local function teleportToPlayer(targetInput)
 	if not rootPart then return end
 	targetInput = targetInput:lower():gsub("%s+", "")
 	local target = nil
-	
+
 	for _, p in pairs(game.Players:GetPlayers()) do
 		local nameMatch = p.Name:lower():gsub("%s+", ""):find(targetInput)
 		local displayMatch = p.DisplayName:lower():gsub("%s+", ""):find(targetInput)
@@ -249,19 +249,19 @@ local function teleportToPlayer(targetInput)
 			break
 		end
 	end
-	
+
 	if not target then
 		warn("No player found matching '" .. targetInput .. "'")
 		return
 	end
-	
+
 	local targetCharacter = target.Character or target.CharacterAdded:Wait()
 	local targetRoot = targetCharacter:WaitForChild("HumanoidRootPart")
-	
+
 	local success, error = pcall(function()
 		rootPart.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0)
 	end)
-	
+
 	if success then
 		print("Teleported to " .. target.DisplayName .. "(@" .. target.Name .. ")")
 	else
@@ -273,7 +273,7 @@ local function createESP(targetPlayer)
 	if targetPlayer == player or not targetPlayer.Character then return end
 	local head = targetPlayer.Character:WaitForChild("Head", 5)
 	if not head then return end
-	
+
 	local esp = {}
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "ESPBillboard"
@@ -282,7 +282,7 @@ local function createESP(targetPlayer)
 	billboard.StudsOffset = Vector3.new(0, 3, 0)
 	billboard.AlwaysOnTop = true
 	billboard.Parent = targetPlayer.Character
-	
+
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Size = UDim2.new(1, 0, 1, 0)
 	nameLabel.BackgroundTransparency = 1
@@ -291,14 +291,14 @@ local function createESP(targetPlayer)
 	nameLabel.Font = Enum.Font.GothamBold
 	nameLabel.TextSize = 14
 	nameLabel.Parent = billboard
-	
+
 	local highlight = Instance.new("Highlight")
 	highlight.Name = "ESPHighlight"
 	highlight.Adornee = targetPlayer.Character
 	highlight.FillTransparency = 1
 	highlight.OutlineColor = Color3.fromRGB(138, 43, 226)
 	highlight.Parent = targetPlayer.Character
-	
+
 	esp.billboard = billboard
 	esp.highlight = highlight
 	espObjects[targetPlayer] = esp
@@ -328,7 +328,7 @@ local function getNearestPlayer()
 	if not rootPart then return end
 	local closestPlayer = nil
 	local shortestDistance = aimbotRange
-	
+
 	for _, target in pairs(game.Players:GetPlayers()) do
 		if target ~= player and target.Character and target.Character:FindFirstChild("Head") then
 			local targetHead = target.Character.Head
@@ -339,7 +339,7 @@ local function getNearestPlayer()
 			end
 		end
 	end
-	
+
 	return closestPlayer
 end
 
@@ -367,27 +367,55 @@ local function updateAimbot()
 end
 
 local function toggleNoClip()
-	if not character or not humanoid then return end
+	if not character or not humanoid or not rootPart then return end
 	noClipEnabled = not noClipEnabled
 	local toggleButton = ContentFrames["NoClip"]:FindFirstChild("ToggleButton")
 	if noClipEnabled then
-		humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+		humanoid.WalkSpeed = 0 -- Disable default walking
 		for _, part in pairs(character:GetDescendants()) do
 			if part:IsA("BasePart") then
 				part.CanCollide = false
 			end
 		end
+		-- Reuse bodyVelocity and bodyGyro for movement
+		bodyVelocity = Instance.new("BodyVelocity")
+		bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+		bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+		bodyVelocity.Parent = rootPart
+		bodyGyro = Instance.new("BodyGyro")
+		bodyGyro.P = 3000
+		bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+		bodyGyro.CFrame = rootPart.CFrame
+		bodyGyro.Parent = rootPart
 		toggleButton.Text = "NoClip: ON"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
 	else
-		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+		humanoid.WalkSpeed = 16 -- Restore default walking
 		for _, part in pairs(character:GetDescendants()) do
 			if part:IsA("BasePart") then
 				part.CanCollide = true
 			end
 		end
+		if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
+		if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
 		toggleButton.Text = "NoClip: OFF"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	end
+end
+
+local function updateNoClip()
+	if noClipEnabled and rootPart and bodyVelocity and bodyGyro then
+		local direction = Vector3.new()
+		local camLook = camera.CFrame.LookVector
+		local moveDir = humanoid.MoveDirection
+
+		if moveDir.Magnitude > 0 then direction = direction + moveDir end
+		if isJumping then direction = direction + Vector3.new(0, 1, 0) end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then direction = direction + Vector3.new(0, -1, 0) end
+
+		if direction.Magnitude > 0 then direction = direction.Unit * flySpeed end -- Use flySpeed for consistency
+		bodyVelocity.Velocity = direction
+		bodyGyro.CFrame = CFrame.new(rootPart.Position, rootPart.Position + camLook)
 	end
 end
 
@@ -525,7 +553,7 @@ local function createTabContent(tabName, ContentFrame)
 				warn("Please enter a username or display name.")
 			end
 		end)
-		
+
 		TextBox.FocusLost:Connect(function(enterPressed)
 			if enterPressed and TextBox.Text ~= "" then
 				teleportToPlayer(TextBox.Text)
@@ -571,6 +599,16 @@ local function createTabContent(tabName, ContentFrame)
 		ToggleButton.TextSize = 18
 		ToggleButton.Parent = ContentFrame
 		ToggleButton.MouseButton1Click:Connect(toggleNoClip)
+
+		local InfoLabel = Instance.new("TextLabel")
+		InfoLabel.Size = UDim2.new(0.9, 0, 0, 40)
+		InfoLabel.Position = UDim2.new(0.05, 0, 0, 70)
+		InfoLabel.BackgroundTransparency = 1
+		InfoLabel.Text = "Controls: Joystick/WASD, Jump (up), Shift (down)"
+		InfoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+		InfoLabel.Font = Enum.Font.Gotham
+		InfoLabel.TextSize = 14
+		InfoLabel.Parent = ContentFrame
 	end
 end
 
@@ -581,7 +619,7 @@ end
 
 -- Jump Detection for Mobile
 UserInputService.JumpRequest:Connect(function()
-	if flyEnabled then
+	if flyEnabled or noClipEnabled then
 		isJumping = true
 		delay(0.1, function()
 			isJumping = false
@@ -593,6 +631,7 @@ end)
 RunService.RenderStepped:Connect(function()
 	updateFlight()
 	updateAimbot()
+	updateNoClip()
 	if godModeEnabled and humanoid and humanoid.Health < math.huge then humanoid.Health = math.huge end
 end)
 
