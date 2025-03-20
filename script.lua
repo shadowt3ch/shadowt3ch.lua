@@ -13,7 +13,7 @@ local espEnabled = false
 local flySpeed = 50
 local walkSpeed = 32
 local bodyVelocity, bodyGyro = nil, nil
-local espObjects = {} -- Store ESP objects for cleanup
+local espObjects = {}
 
 -- Main UI Setup
 local ScreenGui = Instance.new("ScreenGui")
@@ -88,7 +88,7 @@ local ContentFrames = {}
 for i, tabName in ipairs(Tabs) do
 	local TabButton = Instance.new("TextButton")
 	TabButton.Parent = TabFrame
-	TabButton.Size = UDim2.new(0.166, -2, 1, 0) -- Adjusted for 6 tabs
+	TabButton.Size = UDim2.new(0.166, -2, 1, 0) -- 6 tabs
 	TabButton.Position = UDim2.new((i - 1) * 0.166, 0, 0, 0)
 	TabButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 	TabButton.Text = tabName
@@ -96,7 +96,6 @@ for i, tabName in ipairs(Tabs) do
 	TabButton.Font = Enum.Font.Gotham
 	TabButton.TextSize = 12
 
-	-- Hover Effect
 	TabButton.MouseEnter:Connect(function()
 		TabButton.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
 	end)
@@ -108,7 +107,6 @@ for i, tabName in ipairs(Tabs) do
 		end
 	end)
 
-	-- Content Frames
 	local ContentFrame = Instance.new("Frame")
 	ContentFrame.Parent = MainFrame
 	ContentFrame.Size = UDim2.new(1, 0, 1, -60)
@@ -117,7 +115,6 @@ for i, tabName in ipairs(Tabs) do
 	ContentFrame.Visible = (i == 1)
 	ContentFrames[tabName] = ContentFrame
 
-	-- Tab Switching
 	TabButton.MouseButton1Click:Connect(function()
 		for _, frame in pairs(ContentFrames) do
 			frame.Visible = false
@@ -234,10 +231,33 @@ local function toggleGodMode()
 end
 
 local function teleportToPlayer(targetName)
-	local target = game.Players:FindFirstChild(targetName)
-	if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-		rootPart.CFrame = target.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+	targetName = targetName:lower()
+	local target = nil
+	
+	for _, p in pairs(game.Players:GetPlayers()) do
+		if p.Name:lower():find(targetName) then
+			target = p
+			break
+		end
 	end
+	
+	if not target then
+		warn("Player '" .. targetName .. "' not found.")
+		return
+	end
+	
+	if not target.Character or not target.Character:FindFirstChild("HumanoidRootPart") then
+		warn("Target player '" .. target.Name .. "' has no character or HumanoidRootPart.")
+		target.CharacterAdded:Wait()
+	end
+	
+	if not rootPart then
+		warn("Local player has no HumanoidRootPart.")
+		return
+	end
+	
+	rootPart.CFrame = target.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+	print("Teleported to " .. target.Name)
 end
 
 local function createESP(targetPlayer)
@@ -245,7 +265,6 @@ local function createESP(targetPlayer)
 	
 	local esp = {}
 	
-	-- Name Tag
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "ESPBillboard"
 	billboard.Adornee = targetPlayer.Character.Head
@@ -263,7 +282,6 @@ local function createESP(targetPlayer)
 	nameLabel.TextSize = 14
 	nameLabel.Parent = billboard
 	
-	-- Box Outline
 	local highlight = Instance.new("Highlight")
 	highlight.Name = "ESPHighlight"
 	highlight.Adornee = targetPlayer.Character
@@ -296,7 +314,7 @@ local function toggleESP()
 	end
 end
 
--- Mobile-Friendly Slider Logic
+-- Slider Logic
 local function createSlider(parent, posY, min, max, default, callback)
 	local SliderFrame = Instance.new("Frame")
 	SliderFrame.Size = UDim2.new(0.9, 0, 0, 20)
@@ -334,7 +352,7 @@ local function createSlider(parent, posY, min, max, default, callback)
 	end)
 end
 
--- Add Content for Each Tab
+-- Tab Content
 local function createTabContent(tabName, ContentFrame)
 	if tabName == "Speed" then
 		local ToggleButton = Instance.new("TextButton")
@@ -411,7 +429,7 @@ local function createTabContent(tabName, ContentFrame)
 		TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 		TextBox.Font = Enum.Font.Gotham
 		TextBox.TextSize = 18
-		TextBox.PlaceholderText = "Enter player name"
+		TextBox.PlaceholderText = "Enter player name (partial OK)"
 		TextBox.Parent = ContentFrame
 
 		local TeleportButton = Instance.new("TextButton")
@@ -424,7 +442,17 @@ local function createTabContent(tabName, ContentFrame)
 		TeleportButton.TextSize = 18
 		TeleportButton.Parent = ContentFrame
 		TeleportButton.MouseButton1Click:Connect(function()
-			teleportToPlayer(TextBox.Text)
+			if TextBox.Text ~= "" then
+				teleportToPlayer(TextBox.Text)
+			else
+				warn("Please enter a player name.")
+			end
+		end)
+		
+		TextBox.FocusLost:Connect(function(enterPressed)
+			if enterPressed and TextBox.Text ~= "" then
+				teleportToPlayer(TextBox.Text)
+			end
 		end)
 	elseif tabName == "ESP" then
 		local ToggleButton = Instance.new("TextButton")
@@ -462,7 +490,6 @@ player.CharacterAdded:Connect(function(newCharacter)
 	if godModeEnabled then toggleGodMode() toggleGodMode() end
 end)
 
--- Handle player joining/leaving for ESP
 game.Players.PlayerAdded:Connect(function(newPlayer)
 	if espEnabled then
 		newPlayer.CharacterAdded:Connect(function()
