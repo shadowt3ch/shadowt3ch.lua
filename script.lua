@@ -14,11 +14,13 @@ local godModeEnabled = false
 local espEnabled = false
 local aimbotEnabled = false
 local noClipEnabled = false
+local dupeEnabled = false
 local flySpeed = 50
 local walkSpeed = 32
 local aimbotRange = 100
 local bodyVelocity, bodyGyro = nil, nil
 local espObjects = {}
+local dupeClone = nil
 local isJumping = false
 
 -- Main UI Setup
@@ -82,7 +84,7 @@ TabAccent.Position = UDim2.new(0, 0, 1, -2)
 TabAccent.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
 
 -- Tabs Setup
-local Tabs = {"Speed", "Fly", "Invis", "God", "Teleport", "ESP", "Aimbot", "NoClip"}
+local Tabs = {"Speed", "Fly", "Invis", "God", "Teleport", "ESP", "Aimbot", "NoClip", "Dupe"}
 local ContentFrames = {}
 for i, tabName in ipairs(Tabs) do
 	local TabButton = Instance.new("TextButton")
@@ -197,7 +199,7 @@ local function toggleInvisible()
 		for _, part in pairs(character:GetDescendants()) do
 			if part:IsA("BasePart") or part:IsA("MeshPart") then
 				part.Transparency = 1
-				part.LocalTransparencyModifier = 1 -- Ensure local invisibility
+				part.LocalTransparencyModifier = 1
 			end
 			if part:IsA("Decal") then
 				part.Transparency = 1
@@ -210,7 +212,6 @@ local function toggleInvisible()
 				end
 			end
 		end
-		-- Hide name and health
 		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 		toggleButton.Text = "Invis: ON"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
@@ -231,7 +232,6 @@ local function toggleInvisible()
 				end
 			end
 		end
-		-- Restore name and health visibility
 		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
 		toggleButton.Text = "Invis: OFF"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
@@ -427,21 +427,97 @@ local function toggleNoClip()
 	noClipEnabled = not noClipEnabled
 	local toggleButton = ContentFrames["NoClip"]:FindFirstChild("ToggleButton")
 	if noClipEnabled then
-		for _, part in pairs(character:GetDescendants()) do
-			if part:IsA("BasePart") then
-				part.CanCollide = false
-			end
-		end
 		toggleButton.Text = "NoClip: ON"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
 	else
+		toggleButton.Text = "NoClip: OFF"
+		toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	end
+end
+
+local function updateNoClip()
+	if noClipEnabled and character then
 		for _, part in pairs(character:GetDescendants()) do
-			if part:IsA("BasePart") then
+			if part:IsA("BasePart") or part:IsA("MeshPart") then
+				part.CanCollide = false
+			end
+		end
+	else
+		for _, part in pairs(character:GetDescendants()) do
+			if part:IsA("BasePart") or part:IsA("MeshPart") then
 				part.CanCollide = true
 			end
 		end
-		toggleButton.Text = "NoClip: OFF"
+	end
+end
+
+local function toggleDupe()
+	if not character or not rootPart then 
+		warn("Dupe: Character or RootPart not found")
+		return 
+	end
+	dupeEnabled = not dupeEnabled
+	local toggleButton = ContentFrames["Dupe"]:FindFirstChild("ToggleButton")
+
+	if dupeEnabled then
+		print("Attempting to create dupe clone...")
+		local success, err = pcall(function()
+			dupeClone = character:Clone()
+			if not dupeClone then
+				warn("Dupe: Cloning failed")
+				return
+			end
+			dupeClone.Parent = workspace
+			dupeClone.Name = player.Name .. "_Dupe"
+			local cloneRoot = dupeClone:FindFirstChild("HumanoidRootPart")
+			if cloneRoot then
+				cloneRoot.CFrame = rootPart.CFrame * CFrame.new(3, 0, 0)
+				cloneRoot.Anchored = true -- Anchor initially to ensure visibility
+			else
+				warn("Dupe: No HumanoidRootPart in clone")
+			end
+			local cloneHumanoid = dupeClone:FindFirstChild("Humanoid")
+			if cloneHumanoid then
+				cloneHumanoid.WalkSpeed = 0
+				cloneHumanoid.JumpPower = 0
+				cloneHumanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+			end
+			for _, part in pairs(dupeClone:GetDescendants()) do
+				if part:IsA("BasePart") or part:IsA("MeshPart") then
+					part.CanCollide = false
+					part.Transparency = 0 -- Ensure visibility
+				end
+			end
+			print("Dupe clone created at " .. tostring(cloneRoot and cloneRoot.Position))
+		end)
+		if not success then
+			warn("Dupe error: " .. err)
+			dupeClone = nil
+			dupeEnabled = false
+			toggleButton.Text = "Dupe: OFF"
+			toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+			return
+		end
+		toggleButton.Text = "Dupe: ON"
+		toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+	else
+		if dupeClone then
+			dupeClone:Destroy()
+			dupeClone = nil
+			print("Dupe clone destroyed")
+		end
+		toggleButton.Text = "Dupe: OFF"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	end
+end
+
+local function updateDupe()
+	if dupeEnabled and dupeClone and rootPart then
+		local cloneRoot = dupeClone:FindFirstChild("HumanoidRootPart")
+		if cloneRoot then
+			cloneRoot.Anchored = false -- Unanchor to follow
+			cloneRoot.CFrame = rootPart.CFrame * CFrame.new(3, 0, 0)
+		end
 	end
 end
 
@@ -625,6 +701,18 @@ local function createTabContent(tabName, ContentFrame)
 		ToggleButton.TextSize = 18
 		ToggleButton.Parent = ContentFrame
 		ToggleButton.MouseButton1Click:Connect(toggleNoClip)
+	elseif tabName == "Dupe" then
+		local ToggleButton = Instance.new("TextButton")
+		ToggleButton.Name = "ToggleButton"
+		ToggleButton.Size = UDim2.new(0.9, 0, 0, 40)
+		ToggleButton.Position = UDim2.new(0.05, 0, 0, 20)
+		ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		ToggleButton.Text = "Dupe: OFF"
+		ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+		ToggleButton.Font = Enum.Font.Gotham
+		ToggleButton.TextSize = 18
+		ToggleButton.Parent = ContentFrame
+		ToggleButton.MouseButton1Click:Connect(toggleDupe)
 	end
 end
 
@@ -648,6 +736,8 @@ RunService.RenderStepped:Connect(function()
 	updateFlight()
 	updateAimbot()
 	updateESP()
+	updateNoClip()
+	updateDupe()
 end)
 
 player.CharacterAdded:Connect(function(newCharacter)
@@ -684,7 +774,11 @@ player.CharacterAdded:Connect(function(newCharacter)
 			end
 		end)
 	end
-	if noClipEnabled then toggleNoClip() toggleNoClip() end
+	if noClipEnabled then toggleNoClip() end
+	if dupeEnabled then 
+		toggleDupe() -- Turn off and on to recreate clone
+		toggleDupe()
+	end
 end)
 
 game.Players.PlayerAdded:Connect(function(newPlayer)
