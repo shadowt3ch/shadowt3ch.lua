@@ -19,6 +19,7 @@ local walkSpeed = 32
 local aimbotRange = 100
 local bodyVelocity, bodyGyro = nil, nil
 local espObjects = {}
+local isJumping = false -- Track jump state for mobile
 
 -- Main UI Setup
 local ScreenGui = Instance.new("ScreenGui")
@@ -181,9 +182,14 @@ local function updateFlight()
 		local direction = Vector3.new()
 		local camLook = camera.CFrame.LookVector
 		local moveDir = humanoid.MoveDirection
+		
+		-- Horizontal movement (WASD or mobile joystick)
 		if moveDir.Magnitude > 0 then direction = direction + moveDir end
-		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then direction = direction + Vector3.new(0, 1, 0) end
-		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then direction = direction + Vector3.new(0, -1, 0) end
+		
+		-- Vertical movement (Jump for up, Shift for down)
+		if isJumping then direction = direction + Vector3.new(0, 1, 0) end -- Jump button (mobile/PC)
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then direction = direction + Vector3.new(0, -1, 0) end -- Shift for PC
+		
 		if direction.Magnitude > 0 then direction = direction.Unit * flySpeed end
 		bodyVelocity.Velocity = direction
 		bodyGyro.CFrame = CFrame.new(rootPart.Position, rootPart.Position + camLook)
@@ -379,7 +385,7 @@ local function toggleNoClip()
 	noClipEnabled = not noClipEnabled
 	local toggleButton = ContentFrames["NoClip"]:FindFirstChild("ToggleButton")
 	if noClipEnabled then
-		humanoid:ChangeState(Enum.HumanoidStateType.Physics) -- Disable default physics
+		humanoid:ChangeState(Enum.HumanoidStateType.Physics)
 		for _, part in pairs(character:GetDescendants()) do
 			if part:IsA("BasePart") then
 				part.CanCollide = false
@@ -388,7 +394,7 @@ local function toggleNoClip()
 		toggleButton.Text = "NoClip: ON"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
 	else
-		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp) -- Restore normal physics
+		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
 		for _, part in pairs(character:GetDescendants()) do
 			if part:IsA("BasePart") then
 				part.CanCollide = true
@@ -477,7 +483,7 @@ local function createTabContent(tabName, ContentFrame)
 		InfoLabel.Size = UDim2.new(0.9, 0, 0, 40)
 		InfoLabel.Position = UDim2.new(0.05, 0, 0, 120)
 		InfoLabel.BackgroundTransparency = 1
-		InfoLabel.Text = "Controls: WASD, Space (up), Shift (down)"
+		InfoLabel.Text = "Controls: Joystick/WASD, Jump (up), Shift (down)"
 		InfoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 		InfoLabel.Font = Enum.Font.Gotham
 		InfoLabel.TextSize = 14
@@ -607,36 +613,5 @@ for tabName, frame in pairs(ContentFrames) do
 	createTabContent(tabName, frame)
 end
 
--- Updates
-RunService.RenderStepped:Connect(function()
-	updateFlight()
-	updateAimbot()
-	if godModeEnabled and humanoid.Health < math.huge then humanoid.Health = math.huge end
-end)
-
-player.CharacterAdded:Connect(function(newCharacter)
-	character = newCharacter
-	humanoid = character:WaitForChild("Humanoid")
-	rootPart = character:WaitForChild("HumanoidRootPart")
-	if speedEnabled then toggleSpeed() toggleSpeed() end
-	if flyEnabled then toggleFly() toggleFly() end
-	if invisibleEnabled then toggleInvisible() toggleInvisible() end
-	if godModeEnabled then toggleGodMode() toggleGodMode() end
-	if noClipEnabled then toggleNoClip() toggleNoClip() end -- Reapply no clip if active
-end)
-
-game.Players.PlayerAdded:Connect(function(newPlayer)
-	if espEnabled then
-		newPlayer.CharacterAdded:Connect(function()
-			createESP(newPlayer)
-		end)
-	end
-end)
-
-game.Players.PlayerRemoving:Connect(function(leavingPlayer)
-	if espObjects[leavingPlayer] then
-		if espObjects[leavingPlayer].billboard then espObjects[leavingPlayer].billboard:Destroy() end
-		if espObjects[leavingPlayer].highlight then espObjects[leavingPlayer].highlight:Destroy() end
-		espObjects[leavingPlayer] = nil
-	end
-end)
+-- Jump Detection for Mobile
+UserInputService.JumpRequest:Connect(function
