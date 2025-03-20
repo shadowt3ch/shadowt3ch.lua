@@ -13,9 +13,10 @@ local invisibleEnabled = false
 local godModeEnabled = false
 local espEnabled = false
 local aimbotEnabled = false
+local noClipEnabled = false
 local flySpeed = 50
 local walkSpeed = 32
-local aimbotRange = 100 -- Default range in studs
+local aimbotRange = 100
 local bodyVelocity, bodyGyro = nil, nil
 local espObjects = {}
 
@@ -87,7 +88,7 @@ TabAccent.Position = UDim2.new(0, 0, 1, -2)
 TabAccent.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
 
 -- Tabs Setup
-local Tabs = {"Speed", "Fly", "Invis", "God", "Teleport", "ESP", "Aimbot"}
+local Tabs = {"Speed", "Fly", "Invis", "God", "Teleport", "ESP", "Aimbot", "NoClip"}
 local ContentFrames = {}
 for i, tabName in ipairs(Tabs) do
 	local TabButton = Instance.new("TextButton")
@@ -369,8 +370,32 @@ local function updateAimbot()
 		if target and target.Character and target.Character:FindFirstChild("Head") then
 			local targetPos = target.Character.Head.Position
 			local cameraCFrame = CFrame.new(camera.CFrame.Position, targetPos)
-			camera.CFrame = camera.CFrame:Lerp(cameraCFrame, 0.5) -- Smooth aiming
+			camera.CFrame = camera.CFrame:Lerp(cameraCFrame, 0.5)
 		end
+	end
+end
+
+local function toggleNoClip()
+	noClipEnabled = not noClipEnabled
+	local toggleButton = ContentFrames["NoClip"]:FindFirstChild("ToggleButton")
+	if noClipEnabled then
+		humanoid:ChangeState(Enum.HumanoidStateType.Physics) -- Disable default physics
+		for _, part in pairs(character:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.CanCollide = false
+			end
+		end
+		toggleButton.Text = "NoClip: ON"
+		toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+	else
+		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp) -- Restore normal physics
+		for _, part in pairs(character:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.CanCollide = true
+			end
+		end
+		toggleButton.Text = "NoClip: OFF"
+		toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 	end
 end
 
@@ -552,6 +577,28 @@ local function createTabContent(tabName, ContentFrame)
 		InfoLabel.Font = Enum.Font.Gotham
 		InfoLabel.TextSize = 14
 		InfoLabel.Parent = ContentFrame
+	elseif tabName == "NoClip" then
+		local ToggleButton = Instance.new("TextButton")
+		ToggleButton.Name = "ToggleButton"
+		ToggleButton.Size = UDim2.new(0.9, 0, 0, 40)
+		ToggleButton.Position = UDim2.new(0.05, 0, 0, 20)
+		ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		ToggleButton.Text = "NoClip: OFF"
+		ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+		ToggleButton.Font = Enum.Font.Gotham
+		ToggleButton.TextSize = 18
+		ToggleButton.Parent = ContentFrame
+		ToggleButton.MouseButton1Click:Connect(toggleNoClip)
+
+		local InfoLabel = Instance.new("TextLabel")
+		InfoLabel.Size = UDim2.new(0.9, 0, 0, 40)
+		InfoLabel.Position = UDim2.new(0.05, 0, 0, 70)
+		InfoLabel.BackgroundTransparency = 1
+		InfoLabel.Text = "Use with Fly for best results"
+		InfoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+		InfoLabel.Font = Enum.Font.Gotham
+		InfoLabel.TextSize = 14
+		InfoLabel.Parent = ContentFrame
 	end
 end
 
@@ -575,6 +622,7 @@ player.CharacterAdded:Connect(function(newCharacter)
 	if flyEnabled then toggleFly() toggleFly() end
 	if invisibleEnabled then toggleInvisible() toggleInvisible() end
 	if godModeEnabled then toggleGodMode() toggleGodMode() end
+	if noClipEnabled then toggleNoClip() toggleNoClip() end -- Reapply no clip if active
 end)
 
 game.Players.PlayerAdded:Connect(function(newPlayer)
