@@ -278,19 +278,31 @@ local function createESP(targetPlayer)
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "ESPBillboard"
 	billboard.Adornee = head
-	billboard.Size = UDim2.new(0, 100, 0, 30)
+	billboard.Size = UDim2.new(0, 100, 0, 50) -- Increased height for distance label
 	billboard.StudsOffset = Vector3.new(0, 3, 0)
 	billboard.AlwaysOnTop = true
 	billboard.Parent = targetPlayer.Character
 
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Size = UDim2.new(1, 0, 1, 0)
+	nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+	nameLabel.Position = UDim2.new(0, 0, 0, 0)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Text = targetPlayer.DisplayName .. " (@" .. targetPlayer.Name .. ")"
 	nameLabel.TextColor3 = Color3.fromRGB(138, 43, 226)
 	nameLabel.Font = Enum.Font.GothamBold
 	nameLabel.TextSize = 14
 	nameLabel.Parent = billboard
+
+	local distanceLabel = Instance.new("TextLabel")
+	distanceLabel.Name = "DistanceLabel"
+	distanceLabel.Size = UDim2.new(1, 0, 0.5, 0)
+	distanceLabel.Position = UDim2.new(0, 0, 0.5, 0)
+	distanceLabel.BackgroundTransparency = 1
+	distanceLabel.Text = "0 studs"
+	distanceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	distanceLabel.Font = Enum.Font.Gotham
+	distanceLabel.TextSize = 12
+	distanceLabel.Parent = billboard
 
 	local highlight = Instance.new("Highlight")
 	highlight.Name = "ESPHighlight"
@@ -300,6 +312,7 @@ local function createESP(targetPlayer)
 	highlight.Parent = targetPlayer.Character
 
 	esp.billboard = billboard
+	esp.distanceLabel = distanceLabel
 	esp.highlight = highlight
 	espObjects[targetPlayer] = esp
 end
@@ -321,6 +334,20 @@ local function toggleESP()
 		espObjects = {}
 		toggleButton.Text = "ESP: OFF"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	end
+end
+
+local function updateESP()
+	if espEnabled and rootPart then
+		for targetPlayer, esp in pairs(espObjects) do
+			if targetPlayer.Character and targetPlayer.Character:FindFirstChild("Head") then
+				local targetHead = targetPlayer.Character.Head
+				local distance = (rootPart.Position - targetHead.Position).Magnitude
+				esp.distanceLabel.Text = math.floor(distance) .. " studs"
+			else
+				esp.distanceLabel.Text = "N/A"
+			end
+		end
 	end
 end
 
@@ -371,13 +398,12 @@ local function toggleNoClip()
 	noClipEnabled = not noClipEnabled
 	local toggleButton = ContentFrames["NoClip"]:FindFirstChild("ToggleButton")
 	if noClipEnabled then
-		humanoid.WalkSpeed = 0 -- Disable default walking
+		humanoid.WalkSpeed = 0
 		for _, part in pairs(character:GetDescendants()) do
 			if part:IsA("BasePart") then
 				part.CanCollide = false
 			end
 		end
-		-- Reuse bodyVelocity and bodyGyro for movement
 		bodyVelocity = Instance.new("BodyVelocity")
 		bodyVelocity.Velocity = Vector3.new(0, 0, 0)
 		bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
@@ -390,7 +416,7 @@ local function toggleNoClip()
 		toggleButton.Text = "NoClip: ON"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
 	else
-		humanoid.WalkSpeed = 16 -- Restore default walking
+		humanoid.WalkSpeed = 16
 		for _, part in pairs(character:GetDescendants()) do
 			if part:IsA("BasePart") then
 				part.CanCollide = true
@@ -413,7 +439,7 @@ local function updateNoClip()
 		if isJumping then direction = direction + Vector3.new(0, 1, 0) end
 		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then direction = direction + Vector3.new(0, -1, 0) end
 
-		if direction.Magnitude > 0 then direction = direction.Unit * flySpeed end -- Use flySpeed for consistency
+		if direction.Magnitude > 0 then direction = direction.Unit * flySpeed end
 		bodyVelocity.Velocity = direction
 		bodyGyro.CFrame = CFrame.new(rootPart.Position, rootPart.Position + camLook)
 	end
@@ -632,6 +658,7 @@ RunService.RenderStepped:Connect(function()
 	updateFlight()
 	updateAimbot()
 	updateNoClip()
+	updateESP() -- Added ESP update
 	if godModeEnabled and humanoid and humanoid.Health < math.huge then humanoid.Health = math.huge end
 end)
 
