@@ -3,6 +3,8 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local camera = workspace.CurrentCamera
 
 -- Hack States
 local speedEnabled = false
@@ -10,8 +12,10 @@ local flyEnabled = false
 local invisibleEnabled = false
 local godModeEnabled = false
 local espEnabled = false
+local aimbotEnabled = false
 local flySpeed = 50
 local walkSpeed = 32
+local aimbotRange = 100 -- Default range in studs
 local bodyVelocity, bodyGyro = nil, nil
 local espObjects = {}
 
@@ -83,24 +87,25 @@ TabAccent.Position = UDim2.new(0, 0, 1, -2)
 TabAccent.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
 
 -- Tabs Setup
-local Tabs = {"Speed", "Fly", "Invis", "God", "Teleport", "ESP"}
+local Tabs = {"Speed", "Fly", "Invis", "God", "Teleport", "ESP", "Aimbot"}
 local ContentFrames = {}
 for i, tabName in ipairs(Tabs) do
 	local TabButton = Instance.new("TextButton")
 	TabButton.Parent = TabFrame
-	TabButton.Size = UDim2.new(0.166, -2, 1, 0) -- 6 tabs
-	TabButton.Position = UDim2.new((i - 1) * 0.166, 0, 0, 0)
+	TabButton.Size = UDim2.new(1/#Tabs, -2, 1, 0)
+	TabButton.Position = UDim2.new((i - 1) * (1/#Tabs), 0, 0, 0)
 	TabButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 	TabButton.Text = tabName
 	TabButton.TextColor3 = Color3.fromRGB(200, 200, 200)
 	TabButton.Font = Enum.Font.Gotham
 	TabButton.TextSize = 12
+	TabButton.BorderSizePixel = 0
 
 	TabButton.MouseEnter:Connect(function()
 		TabButton.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
 	end)
 	TabButton.MouseLeave:Connect(function()
-		if ContentFrames[tabName].Visible then
+		if ContentFrames[tabName] and ContentFrames[tabName].Visible then
 			TabButton.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
 		else
 			TabButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
@@ -230,25 +235,32 @@ local function toggleGodMode()
 	end
 end
 
-local function teleportToPlayer(targetName)
-	targetName = targetName:lower()
+local function teleportToPlayer(targetInput)
+	targetInput = targetInput:lower():gsub("%s+", "")
 	local target = nil
 	
 	for _, p in pairs(game.Players:GetPlayers()) do
-		if p.Name:lower():find(targetName) then
+		local nameMatch = p.Name:lower():gsub("%s+", ""):find(targetInput)
+		local displayMatch = p.DisplayName:lower():gsub("%s+", ""):find(targetInput)
+		if nameMatch or displayMatch then
 			target = p
 			break
 		end
 	end
 	
 	if not target then
-		warn("Player '" .. targetName .. "' not found.")
+		warn("No player found matching '" .. targetInput .. "' (checked Name and DisplayName).")
 		return
 	end
 	
-	if not target.Character or not target.Character:FindFirstChild("HumanoidRootPart") then
-		warn("Target player '" .. target.Name .. "' has no character or HumanoidRootPart.")
-		target.CharacterAdded:Wait()
+	local targetCharacter = target.Character
+	if not targetCharacter or not targetCharacter:FindFirstChild("HumanoidRootPart") then
+		warn("Waiting for '" .. target.Name .. "' character to load...")
+		targetCharacter = target.CharacterAdded:Wait()
+		if not targetCharacter:FindFirstChild("HumanoidRootPart") then
+			warn("Target '" .. target.Name .. "' has no HumanoidRootPart.")
+			return
+		end
 	end
 	
 	if not rootPart then
@@ -256,8 +268,15 @@ local function teleportToPlayer(targetName)
 		return
 	end
 	
-	rootPart.CFrame = target.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
-	print("Teleported to " .. target.Name)
+	local success, error = pcall(function()
+		rootPart.CFrame = targetCharacter.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+	end)
+	
+	if success then
+		print("Teleported to " .. target.DisplayName .. "(@" .. target.Name .. ")")
+	else
+		warn("Teleport failed: " .. error)
+	end
 end
 
 local function createESP(targetPlayer)
@@ -276,7 +295,7 @@ local function createESP(targetPlayer)
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Size = UDim2.new(1, 0, 1, 0)
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.Text = targetPlayer.Name
+	nameLabel.Text = targetPlayer.DisplayName .. " (@" .. targetPlayer.Name .. ")"
 	nameLabel.TextColor3 = Color3.fromRGB(138, 43, 226)
 	nameLabel.Font = Enum.Font.GothamBold
 	nameLabel.TextSize = 14
@@ -311,6 +330,47 @@ local function toggleESP()
 		espObjects = {}
 		toggleButton.Text = "ESP: OFF"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	end
+end
+
+local function getNearestPlayer()
+	local closestPlayer = nil
+	local shortestDistance = aimbotRange
+	
+	for _, target in pairs(game.Players:GetPlayers()) do
+		if target ~= player and target.Character and target.Character:FindFirstChild("Head") then
+			local targetHead = target.Character.Head
+			local distance = (rootPart.Position - targetHead.Position).Magnitude
+			if distance < shortestDistance then
+				closestPlayer = target
+				shortestDistance = distance
+			end
+		end
+	end
+	
+	return closestPlayer
+end
+
+local function toggleAimbot()
+	aimbotEnabled = not aimbotEnabled
+	local toggleButton = ContentFrames["Aimbot"]:FindFirstChild("ToggleButton")
+	if aimbotEnabled then
+		toggleButton.Text = "Aimbot: ON"
+		toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+	else
+		toggleButton.Text = "Aimbot: OFF"
+		toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	end
+end
+
+local function updateAimbot()
+	if aimbotEnabled and rootPart then
+		local target = getNearestPlayer()
+		if target and target.Character and target.Character:FindFirstChild("Head") then
+			local targetPos = target.Character.Head.Position
+			local cameraCFrame = CFrame.new(camera.CFrame.Position, targetPos)
+			camera.CFrame = camera.CFrame:Lerp(cameraCFrame, 0.5) -- Smooth aiming
+		end
 	end
 end
 
@@ -429,7 +489,7 @@ local function createTabContent(tabName, ContentFrame)
 		TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 		TextBox.Font = Enum.Font.Gotham
 		TextBox.TextSize = 18
-		TextBox.PlaceholderText = "Enter player name (partial OK)"
+		TextBox.PlaceholderText = "Enter username or display name"
 		TextBox.Parent = ContentFrame
 
 		local TeleportButton = Instance.new("TextButton")
@@ -445,7 +505,7 @@ local function createTabContent(tabName, ContentFrame)
 			if TextBox.Text ~= "" then
 				teleportToPlayer(TextBox.Text)
 			else
-				warn("Please enter a player name.")
+				warn("Please enter a username or display name.")
 			end
 		end)
 		
@@ -466,6 +526,32 @@ local function createTabContent(tabName, ContentFrame)
 		ToggleButton.TextSize = 18
 		ToggleButton.Parent = ContentFrame
 		ToggleButton.MouseButton1Click:Connect(toggleESP)
+	elseif tabName == "Aimbot" then
+		local ToggleButton = Instance.new("TextButton")
+		ToggleButton.Name = "ToggleButton"
+		ToggleButton.Size = UDim2.new(0.9, 0, 0, 40)
+		ToggleButton.Position = UDim2.new(0.05, 0, 0, 20)
+		ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		ToggleButton.Text = "Aimbot: OFF"
+		ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+		ToggleButton.Font = Enum.Font.Gotham
+		ToggleButton.TextSize = 18
+		ToggleButton.Parent = ContentFrame
+		ToggleButton.MouseButton1Click:Connect(toggleAimbot)
+
+		createSlider(ContentFrame, 70, 50, 500, aimbotRange, function(value)
+			aimbotRange = value
+		end)
+
+		local InfoLabel = Instance.new("TextLabel")
+		InfoLabel.Size = UDim2.new(0.9, 0, 0, 40)
+		InfoLabel.Position = UDim2.new(0.05, 0, 0, 120)
+		InfoLabel.BackgroundTransparency = 1
+		InfoLabel.Text = "Adjust range with slider"
+		InfoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+		InfoLabel.Font = Enum.Font.Gotham
+		InfoLabel.TextSize = 14
+		InfoLabel.Parent = ContentFrame
 	end
 end
 
@@ -475,8 +561,9 @@ for tabName, frame in pairs(ContentFrames) do
 end
 
 -- Updates
-game:GetService("RunService").RenderStepped:Connect(function()
+RunService.RenderStepped:Connect(function()
 	updateFlight()
+	updateAimbot()
 	if godModeEnabled and humanoid.Health < math.huge then humanoid.Health = math.huge end
 end)
 
