@@ -132,7 +132,7 @@ end
 
 -- Hack Functions
 local function toggleSpeed()
-	if not humanoid then return end
+	if not humanoid then warn("Speed: Humanoid not found"); return end
 	speedEnabled = not speedEnabled
 	local toggleButton = ContentFrames["Speed"]:FindFirstChild("ToggleButton")
 	if speedEnabled then
@@ -147,7 +147,7 @@ local function toggleSpeed()
 end
 
 local function toggleFly()
-	if not rootPart or not humanoid then return end
+	if not rootPart or not humanoid then warn("Fly: Character parts not found"); return end
 	flyEnabled = not flyEnabled
 	local toggleButton = ContentFrames["Fly"]:FindFirstChild("ToggleButton")
 	if flyEnabled then
@@ -189,43 +189,67 @@ local function updateFlight()
 end
 
 local function toggleInvisible()
-	if not character then return end
+	if not character or not humanoid then warn("Invis: Character not found"); return end
 	invisibleEnabled = not invisibleEnabled
 	local toggleButton = ContentFrames["Invis"]:FindFirstChild("ToggleButton")
+
 	if invisibleEnabled then
 		for _, part in pairs(character:GetDescendants()) do
-			if part:IsA("BasePart") or part:IsA("MeshPart") or part:IsA("Decal") then
+			if part:IsA("BasePart") or part:IsA("MeshPart") then
+				part.Transparency = 1
+				part.LocalTransparencyModifier = 1 -- Ensure local invisibility
+			end
+			if part:IsA("Decal") then
 				part.Transparency = 1
 			end
 			if part:IsA("Accessory") then
 				local handle = part:FindFirstChild("Handle")
-				if handle then handle.Transparency = 1 end
+				if handle then
+					handle.Transparency = 1
+					handle.LocalTransparencyModifier = 1
+				end
 			end
 		end
+		-- Hide name and health
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 		toggleButton.Text = "Invis: ON"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
 	else
 		for _, part in pairs(character:GetDescendants()) do
-			if part:IsA("BasePart") or part:IsA("MeshPart") or part:IsA("Decal") then
+			if part:IsA("BasePart") or part:IsA("MeshPart") then
 				part.Transparency = 0
+				part.LocalTransparencyModifier = 0
+			end
+			if part:IsA("Decal") then
+				part.Transparency = part.Name == "face" and 0 or 1
 			end
 			if part:IsA("Accessory") then
 				local handle = part:FindFirstChild("Handle")
-				if handle then handle.Transparency = 0 end
+				if handle then
+					handle.Transparency = 0
+					handle.LocalTransparencyModifier = 0
+				end
 			end
 		end
+		-- Restore name and health visibility
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
 		toggleButton.Text = "Invis: OFF"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 	end
 end
 
 local function toggleGodMode()
-	if not humanoid then return end
+	if not humanoid then warn("God: Humanoid not found"); return end
 	godModeEnabled = not godModeEnabled
 	local toggleButton = ContentFrames["God"]:FindFirstChild("ToggleButton")
 	if godModeEnabled then
 		humanoid.MaxHealth = math.huge
 		humanoid.Health = math.huge
+		humanoid.HealthChanged:Connect(function(health)
+			if godModeEnabled and health < math.huge then
+				humanoid.Health = math.huge
+			end
+		end)
 		toggleButton.Text = "God: ON"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
 	else
@@ -237,26 +261,31 @@ local function toggleGodMode()
 end
 
 local function teleportToPlayer(targetInput)
-	if not rootPart then return end
+	if not rootPart then warn("Teleport: RootPart not found"); return end
 	targetInput = targetInput:lower():gsub("%s+", "")
-	local target = nil
+	if targetInput == "" then warn("Teleport: No input provided"); return end
 
+	local target = nil
 	for _, p in pairs(game.Players:GetPlayers()) do
-		local nameMatch = p.Name:lower():gsub("%s+", ""):find(targetInput)
-		local displayMatch = p.DisplayName:lower():gsub("%s+", ""):find(targetInput)
-		if nameMatch or displayMatch then
+		local usernameLower = p.Name:lower():gsub("%s+", "")
+		local displayNameLower = p.DisplayName:lower():gsub("%s+", "")
+		if usernameLower == targetInput or displayNameLower == targetInput then
 			target = p
 			break
 		end
 	end
 
 	if not target then
-		warn("No player found matching '" .. targetInput .. "'")
+		warn("Teleport: No exact match for '" .. targetInput .. "'")
 		return
 	end
 
 	local targetCharacter = target.Character or target.CharacterAdded:Wait()
-	local targetRoot = targetCharacter:WaitForChild("HumanoidRootPart")
+	local targetRoot = targetCharacter:WaitForChild("HumanoidRootPart", 5)
+	if not targetRoot then
+		warn("Teleport: Target's HumanoidRootPart not found")
+		return
+	end
 
 	local success, error = pcall(function()
 		rootPart.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0)
@@ -278,7 +307,7 @@ local function createESP(targetPlayer)
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "ESPBillboard"
 	billboard.Adornee = head
-	billboard.Size = UDim2.new(0, 100, 0, 50) -- Increased height for distance label
+	billboard.Size = UDim2.new(0, 100, 0, 50)
 	billboard.StudsOffset = Vector3.new(0, 3, 0)
 	billboard.AlwaysOnTop = true
 	billboard.Parent = targetPlayer.Character
@@ -394,54 +423,25 @@ local function updateAimbot()
 end
 
 local function toggleNoClip()
-	if not character or not humanoid or not rootPart then return end
+	if not character or not humanoid then warn("NoClip: Character not found"); return end
 	noClipEnabled = not noClipEnabled
 	local toggleButton = ContentFrames["NoClip"]:FindFirstChild("ToggleButton")
 	if noClipEnabled then
-		humanoid.WalkSpeed = 0
 		for _, part in pairs(character:GetDescendants()) do
 			if part:IsA("BasePart") then
 				part.CanCollide = false
 			end
 		end
-		bodyVelocity = Instance.new("BodyVelocity")
-		bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-		bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-		bodyVelocity.Parent = rootPart
-		bodyGyro = Instance.new("BodyGyro")
-		bodyGyro.P = 3000
-		bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-		bodyGyro.CFrame = rootPart.CFrame
-		bodyGyro.Parent = rootPart
 		toggleButton.Text = "NoClip: ON"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
 	else
-		humanoid.WalkSpeed = 16
 		for _, part in pairs(character:GetDescendants()) do
 			if part:IsA("BasePart") then
 				part.CanCollide = true
 			end
 		end
-		if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
-		if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
 		toggleButton.Text = "NoClip: OFF"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-	end
-end
-
-local function updateNoClip()
-	if noClipEnabled and rootPart and bodyVelocity and bodyGyro then
-		local direction = Vector3.new()
-		local camLook = camera.CFrame.LookVector
-		local moveDir = humanoid.MoveDirection
-
-		if moveDir.Magnitude > 0 then direction = direction + moveDir end
-		if isJumping then direction = direction + Vector3.new(0, 1, 0) end
-		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then direction = direction + Vector3.new(0, -1, 0) end
-
-		if direction.Magnitude > 0 then direction = direction.Unit * flySpeed end
-		bodyVelocity.Velocity = direction
-		bodyGyro.CFrame = CFrame.new(rootPart.Position, rootPart.Position + camLook)
 	end
 end
 
@@ -560,7 +560,7 @@ local function createTabContent(tabName, ContentFrame)
 		TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 		TextBox.Font = Enum.Font.Gotham
 		TextBox.TextSize = 18
-		TextBox.PlaceholderText = "Enter username or display name"
+		TextBox.PlaceholderText = "Enter exact username or display name"
 		TextBox.Parent = ContentFrame
 
 		local TeleportButton = Instance.new("TextButton")
@@ -576,7 +576,7 @@ local function createTabContent(tabName, ContentFrame)
 			if TextBox.Text ~= "" then
 				teleportToPlayer(TextBox.Text)
 			else
-				warn("Please enter a username or display name.")
+				warn("Teleport: Please enter a username or display name.")
 			end
 		end)
 
@@ -625,16 +625,6 @@ local function createTabContent(tabName, ContentFrame)
 		ToggleButton.TextSize = 18
 		ToggleButton.Parent = ContentFrame
 		ToggleButton.MouseButton1Click:Connect(toggleNoClip)
-
-		local InfoLabel = Instance.new("TextLabel")
-		InfoLabel.Size = UDim2.new(0.9, 0, 0, 40)
-		InfoLabel.Position = UDim2.new(0.05, 0, 0, 70)
-		InfoLabel.BackgroundTransparency = 1
-		InfoLabel.Text = "Controls: Joystick/WASD, Jump (up), Shift (down)"
-		InfoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-		InfoLabel.Font = Enum.Font.Gotham
-		InfoLabel.TextSize = 14
-		InfoLabel.Parent = ContentFrame
 	end
 end
 
@@ -645,7 +635,7 @@ end
 
 -- Jump Detection for Mobile
 UserInputService.JumpRequest:Connect(function()
-	if flyEnabled or noClipEnabled then
+	if flyEnabled then
 		isJumping = true
 		delay(0.1, function()
 			isJumping = false
@@ -657,19 +647,43 @@ end)
 RunService.RenderStepped:Connect(function()
 	updateFlight()
 	updateAimbot()
-	updateNoClip()
-	updateESP() -- Added ESP update
-	if godModeEnabled and humanoid and humanoid.Health < math.huge then humanoid.Health = math.huge end
+	updateESP()
 end)
 
 player.CharacterAdded:Connect(function(newCharacter)
 	character = newCharacter
-	humanoid = character:WaitForChild("Humanoid")
-	rootPart = character:WaitForChild("HumanoidRootPart")
-	if speedEnabled then toggleSpeed() toggleSpeed() end
+	humanoid = newCharacter:WaitForChild("Humanoid")
+	rootPart = newCharacter:WaitForChild("HumanoidRootPart")
+	if speedEnabled then humanoid.WalkSpeed = walkSpeed end
 	if flyEnabled then toggleFly() toggleFly() end
-	if invisibleEnabled then toggleInvisible() toggleInvisible() end
-	if godModeEnabled then toggleGodMode() toggleGodMode() end
+	if invisibleEnabled then 
+		for _, part in pairs(character:GetDescendants()) do
+			if part:IsA("BasePart") or part:IsA("MeshPart") then
+				part.Transparency = 1
+				part.LocalTransparencyModifier = 1
+			end
+			if part:IsA("Decal") then
+				part.Transparency = 1
+			end
+			if part:IsA("Accessory") then
+				local handle = part:FindFirstChild("Handle")
+				if handle then
+					handle.Transparency = 1
+					handle.LocalTransparencyModifier = 1
+				end
+			end
+		end
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	end
+	if godModeEnabled then 
+		humanoid.MaxHealth = math.huge
+		humanoid.Health = math.huge
+		humanoid.HealthChanged:Connect(function(health)
+			if godModeEnabled and health < math.huge then
+				humanoid.Health = math.huge
+			end
+		end)
+	end
 	if noClipEnabled then toggleNoClip() toggleNoClip() end
 end)
 
